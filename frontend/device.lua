@@ -41,6 +41,11 @@ local function probeDevice()
         return require("device/cervantes/device")
     end
 
+    local bookeen_test_stat = lfs.attributes("/mnt/app/boordr")
+    if bookeen_test_stat then
+        return require("device/bookeen/device")
+    end
+
     -- add new ports here:
     --
     -- if --[[ implement a proper test instead --]] false then
