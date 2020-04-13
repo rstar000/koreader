@@ -53,6 +53,7 @@ KOBO_DIR=$(PLATFORM_DIR)/kobo
 MACOS_DIR=$(PLATFORM_DIR)/mac
 POCKETBOOK_DIR=$(PLATFORM_DIR)/pocketbook
 REMARKABLE_DIR=$(PLATFORM_DIR)/remarkable
+BOOKEEN_DIR=$(PLATFORM_DIR)/bookeen
 SONY_PRSTUX_DIR=$(PLATFORM_DIR)/sony-prstux
 UBUNTUTOUCH_DIR=$(PLATFORM_DIR)/ubuntu-touch
 UBUNTUTOUCH_SDL_DIR:=$(UBUNTUTOUCH_DIR)/ubuntu-touch-sdl
@@ -438,6 +439,36 @@ remarkableupdate: all
 	        tar -I"gzip --rsyncable" -cah --no-recursion -f ../$(REMARKABLE_PACKAGE_OTA) \
 	        -T koreader/ota/package.index
 
+BOOKEEN_PACKAGE:=koreader-bookeen$(KODEDUG_SUFFIX)-$(VERSION).zip
+BOOKEEN_PACKAGE_OTA:=koreader-bookeen$(KODEDUG_SUFFIX)-$(VERSION).targz
+bookeenupdate: all
+	# ensure that the binaries were built for ARM
+	file $(INSTALL_DIR)/koreader/luajit | grep ARM || exit 1
+	# remove old package if any
+	rm -f $(BOOKEEN_PACKAGE)
+	# Bookeen scripts
+	cp $(REMARKABLE_DIR)/* $(INSTALL_DIR)/koreader
+	cp $(COMMON_DIR)/spinning_zsync $(INSTALL_DIR)/koreader
+	# create new package
+	cd $(INSTALL_DIR) && \
+	        zip -9 -r \
+	                ../$(BOOKEEN_PACKAGE) \
+	                koreader -x "koreader/resources/fonts/*" \
+	                "koreader/resources/icons/src/*" "koreader/spec/*" \
+	                $(ZIP_EXCLUDE)
+	# generate update package index file
+	zipinfo -1 $(BOOKEEN_PACKAGE) > \
+	        $(INSTALL_DIR)/koreader/ota/package.index
+	echo "koreader/ota/package.index" >> $(INSTALL_DIR)/koreader/ota/package.index
+	# update index file in zip package
+	cd $(INSTALL_DIR) && zip -u ../$(BOOKEEN_PACKAGE) \
+	        koreader/ota/package.index
+	# make gzip bookeen update for zsync OTA update
+	cd $(INSTALL_DIR) && \
+	        tar -I"gzip --rsyncable" -cah --no-recursion -f ../$(BOOKEEN_PACKAGE) \
+	        -T koreader/ota/package.index
+
+
 SONY_PRSTUX_PACKAGE:=koreader-sony-prstux$(KODEDUG_SUFFIX)-$(VERSION).zip
 SONY_PRSTUX_PACKAGE_OTA:=koreader-sony-prstux$(KODEDUG_SUFFIX)-$(VERSION).targz
 sony-prstuxupdate: all
@@ -517,6 +548,9 @@ else ifeq ($(TARGET), sony-prstux)
 	make sony-prstuxupdate
 else ifeq ($(TARGET), remarkable)
 	make remarkableupdate
+else ifeq ($(TARGET), bookeen)
+	make remarkableupdate
+
 else ifeq ($(TARGET), ubuntu-touch)
 	make utupdate
 else ifeq ($(TARGET), debian)
