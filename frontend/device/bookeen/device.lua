@@ -1,4 +1,5 @@
 local Generic = require("device/generic/device") -- <= look at this file!
+local TimeVal = require("ui/timeval")
 local logger = require("logger")
 
 local function yes() return true end
@@ -12,7 +13,11 @@ local Bookeen = Generic:new{
     canReboot = yes,
     canPowerOff = yes,
     isTouchDevice = yes,
-    hasFrontlight = no,
+    isAlwaysPortrait = yes,
+    hasMultitouch = yes,
+    hasFrontlight = yes,
+    touch_probe_ev_epoch_time = yes,
+    touch_switch_xy = yes,
     display_dpi = 212,
 }
 
@@ -21,51 +26,75 @@ local ABS_X = 00
 local ABS_Y = 01
 local ABS_MT_POSITION_X = 53
 local ABS_MT_POSITION_Y = 54
--- Resolutions from libremarkable src/framebuffer/common.rs
-local screen_width = 758 -- unscaled_size_check: ignore
-local screen_height = 1024 -- unscaled_size_check: ignore
+
+local screen_width = 1024 -- unscaled_size_check: ignore
+local screen_height = 768 -- unscaled_size_check: ignore
 local mt_width = 767 -- unscaled_size_check: ignore
 local mt_height = 1023 -- unscaled_size_check: ignore
 local mt_scale_x = screen_width / mt_width
 local mt_scale_y = screen_height / mt_height
-local adjustTouchEvt = function(self, ev)
-    if ev.type == EV_ABS then
-        -- Mirror X and scale up both X & Y as touch input is different res from
-        -- display
-        if ev.code == ABS_MT_POSITION_X then
-            ev.value = (mt_width - ev.value) * mt_scale_x
+
+local probeEvEpochTime
+-- this function will update itself after the first touch event
+probeEvEpochTime = function(self, ev)
+    local now = TimeVal:now()
+    -- This check should work as long as main UI loop is not blocked for more
+    -- than 10 minute before handling the first touch event.
+    if ev.time.sec <= now.sec - 600 then
+        -- time is seconds since boot, force it to epoch
+        probeEvEpochTime = function(_, _ev)
+            _ev.time = TimeVal:now()
         end
-        if ev.code == ABS_MT_POSITION_Y then
-            ev.value = (mt_height - ev.value) * mt_scale_y
-        end
-        -- The Wacom input layer is non-multi-touch and
-        -- uses its own scaling factor.
-        -- The X and Y coordinates are swapped, and the (real) Y
-        -- coordinate has to be inverted.
-        if ev.code == ABS_X then
-            ev.code = ABS_Y
-            ev.value = (wacom_height - ev.value) * wacom_scale_y
-        elseif ev.code == ABS_Y then
-            ev.code = ABS_X
-            ev.value = ev.value * wacom_scale_x
-        end
+        ev.time = now
+    else
+        -- time is already epoch time, no need to do anything
+        probeEvEpochTime = function(_, _) end
     end
 end
+function Bookeen:initEventAdjustHooks()
+    if self.touch_switch_xy then
+        self.input:registerEventAdjustHook(self.input.adjustTouchSwitchXY)
+    end
+    if self.touch_mirrored_x then
+        self.input:registerEventAdjustHook(
+            self.input.adjustTouchMirrorX,
+            self.screen:getWidth()
+        )
+    end
+    if self.touch_probe_ev_epoch_time then
+        self.input:registerEventAdjustHook(function(_, ev)
+            probeEvEpochTime(_, ev)
+        end)
+    end
+
+    if self.touch_legacy then
+        self.input.handleTouchEv = self.input.handleTouchEvLegacy
+    end
+end
+
 
 function Bookeen:init()
     self.screen = require("ffi/framebuffer_mxcfb"):new{device = self, debug = logger.dbg}
     self.powerd = require("device/bookeen/powerd"):new{device = self}
     self.input = require("device/input"):new{
         device = self,
-        event_map = { },
+        event_map = {
+            [407] = "LPgFwd",
+            [158] = "LPgBack",
+            [139] = "Home",
+            [116] = "Power",
+        },
     }
 
-    self.input.open("/dev/input/event0") -- Wacom
-    self.input.open("/dev/input/event1") -- Touchscreen
-    self.input.open("/dev/input/event2") -- Buttons
+    self.input.open("/dev/input/event0") -- Face buttons
+    self.input.open("/dev/input/event1") -- Power button
+    self.input.open("/dev/input/event2") -- Touch screen
+    self.input.open("/dev/input/event3") -- Accelerometer
+    -- self.input.handleTouchEv = self.input.handleTouchEvPhoenix
+    self:initEventAdjustHooks()
+    -- self.input.open("fake_events")
     -- self.input:registerEventAdjustHook(adjustTouchEvt)
     -- USB plug/unplug, battery charge/not charging are generated as fake events
-    self.input.open("fake_events")
 
     local rotation_mode = self.screen.ORIENTATION_PORTRAIT
     self.screen.native_rotation_mode = rotation_mode
