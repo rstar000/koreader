@@ -1,15 +1,19 @@
 local Generic = require("device/generic/device") -- <= look at this file!
+local WakeupMgr = require("device/wakeupmgr")
+local logger = require("logger")
 local TimeVal = require("ui/timeval")
 local logger = require("logger")
 
 local function yes() return true end
 local function no() return false end
 
+
 local Bookeen = Generic:new{
     model = "Bookeen",
     isBookeen = yes,
     hasKeys = yes,
     hasOTAUpdates = yes,
+    hasWifiManager = yes,
     canReboot = yes,
     canPowerOff = yes,
     isTouchDevice = yes,
@@ -21,6 +25,62 @@ local Bookeen = Generic:new{
     touch_mirrored_x = yes,
     display_dpi = 212,
 }
+
+local function bookeenEnableWifi(toggle)
+    if toggle == 1 then
+        logger.info("Bookeen: enabling Wifi")
+        os.execute("/etc/init.d/wlan start")
+    else
+        logger.info("Bookeen: disabling Wifi")
+        os.execute("/etc/init.d/wlan stop")
+    end
+end
+
+local function isConnected()
+    -- read carrier state from sysfs (for eth0)
+    local file = io.open("/sys/class/net/wlan0/carrier", "rb")
+    if not file then return 0 end
+
+    -- 0 means not connected, 1 connected
+    local out = file:read("*all")
+    file:close()
+
+    local carrier
+    if type(out) ~= "number" then
+        carrier = tonumber(out)
+    else
+        carrier = out
+    end
+
+    if type(carrier) == "number" then
+        return carrier
+    else
+        return 0
+    end
+end
+
+function Bookeen:initNetworkManager(NetworkMgr)
+    function NetworkMgr:turnOffWifi(complete_callback)
+        bookeenEnableWifi(0)
+        if complete_callback then
+            complete_callback()
+        end
+    end
+
+    function NetworkMgr:turnOnWifi(complete_callback)
+        bookeenEnableWifi(1)
+        self:showNetworkMenu(complete_callback)
+    end
+
+    -- net_if = "wlan0"
+    -- NetworkMgr:setWirelessBackend(
+    --     "wpa_supplicant", {ctrl_interface = "/var/run/wpa_supplicant/" .. net_if})
+
+    function NetworkMgr:isWifiOn()
+        return 1 == isConnected()
+    end
+end
+
 
 local probeEvEpochTime
 -- this function will update itself after the first touch event
@@ -72,7 +132,15 @@ function Bookeen:init()
             [158] = "LPgBack",
             [139] = "Home",
             [116] = "Power",
+            [353] = "LightButton",
         },
+        event_map_adapter = {
+            LightButton = function(ev)
+                if self.input:isEvKeyRelease(ev) then
+                    self.powerd:toggleFrontlight()
+                end
+            end,
+        }
     }
 
     self.input.open("/dev/input/event0") -- Face buttons
@@ -81,9 +149,7 @@ function Bookeen:init()
     self.input.open("/dev/input/event3") -- Accelerometer
     self.input.handleTouchEv = self.input.handleTouchEvPhoenix
     self:initEventAdjustHooks()
-    -- self.input.open("fake_events")
-    -- self.input:registerEventAdjustHook(adjustTouchEvt)
-    -- USB plug/unplug, battery charge/not charging are generated as fake events
+    -- self.input.open("fake_events")  -- no free slots :(
 
     local rotation_mode = self.screen.ORIENTATION_PORTRAIT
     self.screen.native_rotation_mode = rotation_mode
@@ -95,14 +161,20 @@ end
 function Bookeen:supportsScreensaver() return true end
 
 function Bookeen:setDateTime(year, month, day, hour, min, sec)
-    -- if hour == nil or min == nil then return true end
-    -- local command
-    -- if year and month and day then
-    --     command = string.format("timedatectl set-time '%d-%d-%d %d:%d:%d'", year, month, day, hour, min, sec)
-    -- else
-    --     command = string.format("timedatectl set-time '%d:%d'",hour, min)
-    -- end
-    -- return os.execute(command) == 0
+    if hour == nil or min == nil then return true end
+    local command
+    if year and month and day then
+        command = string.format("date -s '%d-%d-%d %d:%d:%d'", year, month, day, hour, min, sec)
+    else
+        command = string.format("date -s '%d:%d'",hour, min)
+    end
+
+    if os.execute(command) == 0 then
+        os.execute('hwclock -u -w')
+        return true
+    else
+        return false
+    end
 end
 
 function Bookeen:intoScreenSaver()
@@ -124,7 +196,15 @@ function Bookeen:outofScreenSaver()
 end
 
 function Bookeen:suspend()
-    -- os.execute("systemctl suspend")
+    local f, re, err_msg, err_code
+
+    f = io.open("/sys/power/state", "w")
+    if not f then
+        return false
+    end
+    re, err_msg, err_code = f:write("mem\n")
+    io.close(f)
+    logger.info("Bookeen woke up!")
 end
 
 function Bookeen:resume()
