@@ -18,21 +18,9 @@ local Bookeen = Generic:new{
     hasFrontlight = yes,
     touch_probe_ev_epoch_time = yes,
     touch_switch_xy = yes,
+    touch_mirrored_x = yes,
     display_dpi = 212,
 }
-
-local EV_ABS = 3
-local ABS_X = 00
-local ABS_Y = 01
-local ABS_MT_POSITION_X = 53
-local ABS_MT_POSITION_Y = 54
-
-local screen_width = 1024 -- unscaled_size_check: ignore
-local screen_height = 768 -- unscaled_size_check: ignore
-local mt_width = 767 -- unscaled_size_check: ignore
-local mt_height = 1023 -- unscaled_size_check: ignore
-local mt_scale_x = screen_width / mt_width
-local mt_scale_y = screen_height / mt_height
 
 local probeEvEpochTime
 -- this function will update itself after the first touch event
@@ -51,6 +39,7 @@ probeEvEpochTime = function(self, ev)
         probeEvEpochTime = function(_, _) end
     end
 end
+
 function Bookeen:initEventAdjustHooks()
     if self.touch_switch_xy then
         self.input:registerEventAdjustHook(self.input.adjustTouchSwitchXY)
@@ -90,7 +79,7 @@ function Bookeen:init()
     self.input.open("/dev/input/event1") -- Power button
     self.input.open("/dev/input/event2") -- Touch screen
     self.input.open("/dev/input/event3") -- Accelerometer
-    -- self.input.handleTouchEv = self.input.handleTouchEvPhoenix
+    self.input.handleTouchEv = self.input.handleTouchEvPhoenix
     self:initEventAdjustHooks()
     -- self.input.open("fake_events")
     -- self.input:registerEventAdjustHook(adjustTouchEvt)
@@ -117,21 +106,21 @@ function Bookeen:setDateTime(year, month, day, hour, min, sec)
 end
 
 function Bookeen:intoScreenSaver()
-    -- local Screensaver = require("ui/screensaver")
-    -- if self.screen_saver_mode == false then
-    --     Screensaver:show()
-    -- end
-    -- self.powerd:beforeSuspend()
-    -- self.screen_saver_mode = true
+    local Screensaver = require("ui/screensaver")
+    if self.screen_saver_mode == false then
+        Screensaver:show()
+    end
+    self.powerd:beforeSuspend()
+    self.screen_saver_mode = true
 end
 
 function Bookeen:outofScreenSaver()
-    -- if self.screen_saver_mode == true then
-    --     local Screensaver = require("ui/screensaver")
-    --     Screensaver:close()
-    -- end
-    -- self.powerd:afterResume()
-    -- self.screen_saver_mode = false
+    if self.screen_saver_mode == true then
+        local Screensaver = require("ui/screensaver")
+        Screensaver:close()
+    end
+    self.powerd:afterResume()
+    self.screen_saver_mode = false
 end
 
 function Bookeen:suspend()
@@ -142,11 +131,11 @@ function Bookeen:resume()
 end
 
 function Bookeen:powerOff()
-    os.execute("poweroff")
+    os.execute("/bin/busybox poweroff")
 end
 
 function Bookeen:reboot()
-    os.execute("reboot")
+    os.execute("/bin/busybox reboot")
 end
 
 return Bookeen
