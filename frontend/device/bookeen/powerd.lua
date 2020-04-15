@@ -37,5 +37,11 @@ function Bookeen_PowerD:isChargingHW()
     return self:read_str_file(self.status_file) == "Charging\n"
 end
 
+function Bookeen_PowerD:beforeSuspend()
+end
+
+function Bookeen_PowerD:afterResume()
+end
+
 return Bookeen_PowerD
 
