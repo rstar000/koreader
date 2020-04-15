@@ -132,15 +132,8 @@ function Bookeen:init()
             [158] = "LPgBack",
             [139] = "Home",
             [116] = "Power",
-            [353] = "LightButton",
+            [353] = "Light",
         },
-        event_map_adapter = {
-            LightButton = function(ev)
-                if self.input:isEvKeyRelease(ev) then
-                    self.powerd:toggleFrontlight()
-                end
-            end,
-        }
     }
 
     self.input.open("/dev/input/event0") -- Face buttons
@@ -202,6 +195,7 @@ function Bookeen:suspend()
     if not f then
         return false
     end
+    logger.info("Bookeen going to sleep!")
     re, err_msg, err_code = f:write("mem\n")
     io.close(f)
     logger.info("Bookeen woke up!")
