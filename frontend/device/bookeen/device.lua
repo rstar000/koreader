@@ -134,6 +134,13 @@ function Bookeen:init()
             [116] = "Power",
             [353] = "Light",
         },
+        event_map_adapter = {
+            Light = function(ev)
+                if self.input:isEvKeyRelease(ev) then
+                    self.powerd:toggleFrontlight()
+                end
+            end,
+        }
     }
 
     self.input.open("/dev/input/event0") -- Face buttons

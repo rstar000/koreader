@@ -349,11 +349,7 @@ function UIManager:init()
             Device:outofScreenSaver()
             self:_afterResume()
         end
-        self.event_handlers["Light"] = function()
-            Device:getPowerDevice():toggleFrontlight()
-        end
         self.event_handlers["__default__"] = function(input_event)
-            -- Same as in Kobo: we want to ignore keys during suspension
             if not Device.screen_saver_mode then
                 self:sendEvent(input_event)
             end
