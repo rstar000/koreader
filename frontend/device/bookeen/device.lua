@@ -16,6 +16,7 @@ local Bookeen = Generic:new{
     hasWifiManager = yes,
     canReboot = yes,
     canPowerOff = yes,
+    canHWInvert = no,
     isTouchDevice = yes,
     isAlwaysPortrait = yes,
     hasMultitouch = yes,
@@ -147,7 +148,7 @@ function Bookeen:init()
     self.input.open("/dev/input/event1") -- Power button
     self.input.open("/dev/input/event2") -- Touch screen
     self.input.open("/dev/input/event3") -- Accelerometer
-    self.input.handleTouchEv = self.input.handleTouchEvPhoenix
+    self.input.handleTouchEv = self.input.handleBookeenTouchEvent
     self:initEventAdjustHooks()
     -- self.input.open("fake_events")  -- no free slots :(
 
@@ -220,5 +221,3 @@ function Bookeen:reboot()
 end
 
 return Bookeen
-
-
