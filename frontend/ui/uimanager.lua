@@ -342,6 +342,7 @@ function UIManager:init()
         self.event_handlers["Suspend"] = function()
             self:_beforeSuspend()
             Device:intoScreenSaver()
+            self:forceRePaint()  -- Otherwise the reader sleeps before displaying the screensaver
             Device:suspend()
         end
         self.event_handlers["Resume"] = function()
