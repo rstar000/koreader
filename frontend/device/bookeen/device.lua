@@ -30,55 +30,51 @@ local Bookeen = Generic:new{
 local function bookeenEnableWifi(toggle)
     if toggle == 1 then
         logger.info("Bookeen: enabling Wifi")
-        os.execute("/etc/init.d/wlan start")
+        os.execute("./wlan.sh start")
     else
         logger.info("Bookeen: disabling Wifi")
-        os.execute("/etc/init.d/wlan stop")
-    end
-end
-
-local function isConnected()
-    -- read carrier state from sysfs (for eth0)
-    local file = io.open("/sys/class/net/wlan0/carrier", "rb")
-    if not file then return 0 end
-
-    -- 0 means not connected, 1 connected
-    local out = file:read("*all")
-    file:close()
-
-    local carrier
-    if type(out) ~= "number" then
-        carrier = tonumber(out)
-    else
-        carrier = out
-    end
-
-    if type(carrier) == "number" then
-        return carrier
-    else
-        return 0
+        os.execute("./wlan.sh stop")
     end
 end
 
 function Bookeen:initNetworkManager(NetworkMgr)
     function NetworkMgr:turnOffWifi(complete_callback)
         bookeenEnableWifi(0)
-        if complete_callback then
-            complete_callback()
-        end
+        self.releaseIP()
     end
 
     function NetworkMgr:turnOnWifi(complete_callback)
         bookeenEnableWifi(1)
-        self:showNetworkMenu(complete_callback)
+        self:reconnectOrShowNetworkMenu(complete_callback)
+
     end
 
-    -- net_if = "wlan0"
-    -- NetworkMgr:setWirelessBackend(
-    --     "wpa_supplicant", {ctrl_interface = "/var/run/wpa_supplicant/" .. net_if})
+    NetworkMgr:setWirelessBackend(
+        "wpa_supplicant", {ctrl_interface = "/var/run/wpa_supplicant/wlan0"})
+
+    function NetworkMgr:obtainIP()
+        os.execute("dhcpcd wlan0")
+    end
+    function NetworkMgr:releaseIP()
+        os.execute("dhcpcd -k wlan0")
+    end
+    function NetworkMgr:restoreWifiAsync()
+        os.execute("./restore-wifi-async.sh")
+    end
 
     function NetworkMgr:isWifiOn()
-        return 1 == isConnected()
+        local fd = io.open("/proc/modules", "r")
+        if fd then
+            local lsmod = fd:read("*all")
+            fd:close()
+            if lsmod:len() > 0 then
+                local module = os.getenv("WIFI_MODULE") or "8188eu"
+                if lsmod:find(module) then
+                    return true
+                end
+            end
+        end
+        return false
     end
 end
 
