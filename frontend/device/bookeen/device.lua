@@ -1,12 +1,95 @@
 local Generic = require("device/generic/device") -- <= look at this file!
+local Event = require("ui/event")
 local WakeupMgr = require("device/wakeupmgr")
-local logger = require("logger")
 local TimeVal = require("ui/timeval")
 local logger = require("logger")
 
 local function yes() return true end
 local function no() return false end
 
+--[[
+Bookeen Devices Serial structure : AABBCDDEGYMDSSSSFL
+
++---------------------------------------------------+
+| AA    | Reseller                                  |
+| BB    | Screen Type                               |
+| C     | Device Generation                         |
+| DD    | Device Color                              |
+| E     | Hardware Revision                         |
+| G     | Option fitted on the hardware             |
+| Y     | Year of manufacture                       |
+| M     | Month of manufacture                      |
+| D     | Day of manufacture                        |
+| SSSS  | Build Number of this day of manufacture   |
+| F     | Factory                                   |
+| L     | Factory's Line                            |
+----------------------------------------------------|
+
+Known models:
+    Cybook Orizon                   (CYBOR10-BK):   BK60BK021   2011
+    Cybook Orizon                   (CYBOR10-BK):   BK60BK02K   2011
+    Cybook Odyssey                  (CYBOY10-ADL):  AL60?????   2011
+    Cybook Odyssey HD Frontlight    (CYBOY3F-BK):   BK615BK3F   2012    OMAP 3611
+    Cybook Odyssey Frontlight       (CYBOY4F-BK):   ?           2013    OMAP 3611
+    Nolim                           (CYBOY4F-CF):   ?           2013    OMAP 3611
+    Nolimbook+                      (CYBOY4S-CF):   CF605WE4F   2013    Allwinner A13
+    Saraiva Lev                     (CYBOY4S-SA):   ?           2014    Allwinner A13
+    Saraiva Lev com luz             (CYBOY4F-SA):   ?           2014    Allwinner A13
+    Cybook Odyssey Essential        (CYBOY5S-BK):   ?           2014
+    Cybook Odyssey Frontlight 2     (CYBOY5F-BK):   ?           2014
+    Cybook Muse                     (CYBME1S-BK):   ?           2014
+    Cybook Muse Essential           (CYBFT1S-BK):   ?           2014
+    Cybook Muse Frontlight          (CYBFT1F-BK):   BK646BK1F   2014    Allwinner A13
+    Cybook Ocean                    (CYBON1F-BK):   BK816BK1F   2014    OMAP 3611
+    Cybook Ocean                    (CYBON1F-BK):   BK826BK1F   2014    OMAP 3611
+    Cybook Muse Light               (CYBME1F-BK):   BK666BK1F
+    Cybook Muse Frontlight 2        (CYBME2F-BK):   BK676BK2F
+    Cybook Muse HD                  (CYBFT6F-BK):   BK656GY6F   2016
+    Nolimbook HD                    (CYBFT1S-CF):   ?           2014
+    Nolimbook HD+                   (CYBFT1F-CF):   ?           2014
+    Letto Frontlight                (CYBFT1F-AL):   ?           2014
+    Nolim XL (Cybook Ocean)         (?):            CF816WE1F
+    Saga                            (CYBSB2F-BK):   BK677BK2F   2017
+    Diva                            (CYBD1F-BK):    BK658WE1G   2019
+    Diva HD                         (CYBD6F-BK):    ?
+
+Screen Type seems to be XY where
+- X is Screen Size (6" or 8")
+- Y is still unknown
+
+Sources:
+* https://blog.soutade.fr/post/2015/03/game_over.html#comment_291
+* https://github.com/yoannsculo/blog/blob/master/devices/index.html.markdown2#L12
+--]]
+
+local BOOKEEN_RESELLER_ADLIBRIS     = "AL"
+local BOOKEEN_RESELLER_BOOKEEN      = "BK"
+local BOOKEEN_RESELLER_CARREFOUR    = "CF"
+local BOOKEEN_RESELLER_VIRGIN       = "VG"
+
+local BOOKEEN_GENERATION_GEN3_OPUS  = 0x3
+local BOOKEEN_GENERATION_ORIZON     = 0x4
+local BOOKEEN_GENERATION_ODYSSEY    = 0x5
+local BOOKEEN_GENERATION_MUSE_OCEAN = 0x6
+local BOOKEEN_GENERATION_SAGA       = 0x7
+local BOOKEEN_GENERATION_DIVA       = 0x8
+
+local BOOKEEN_DEVICE_COLOR_BLACK    = "BK"
+local BOOKEEN_DEVICE_COLOR_BORDEAUX = "BX"
+local BOOKEEN_DEVICE_COLOR_GREEN    = "GN"
+local BOOKEEN_DEVICE_COLOR_GREY     = "GY"
+local BOOKEEN_DEVICE_COLOR_YELLOW   = "YW"
+local BOOKEEN_DEVICE_COLOR_WHITE    = "WE"
+
+local function getSerial()
+    local std_out = io.popen("nvram -s|cut -d= -f2")
+    local serial = nil
+    if std_out ~= nil then
+        serial = std_out:read()
+        std_out:close()
+    end
+    return serial
+end
 
 local Bookeen = Generic:new{
     model = "Bookeen",
@@ -25,28 +108,77 @@ local Bookeen = Generic:new{
     touch_switch_xy = yes,
     touch_mirrored_x = yes,
     display_dpi = 212,
+    serial = getSerial(),
+    just_toggled_frontlight = 0
 }
+
+function Bookeen:getReseller()
+    return self.serial:sub(1, 2)
+end
+
+function Bookeen:getScreenType()
+    return tonumber(self.serial:sub(3, 4), 16)
+end
+
+function Bookeen:getDeviceGeneration()
+    return tonumber(self.serial:sub(5, 5), 16)
+end
+
+function Bookeen:getDeviceColor()
+    return self.serial:sub(6, 7)
+end
+
+function Bookeen:getHardwareRevision()
+    return tonumber(self.serial:sub(8, 8), 16)
+end
+
+function Bookeen:getHardwareOptions()
+    return tonumber(self.serial:sub(9, 9), 16)
+end
 
 local function bookeenEnableWifi(toggle)
     if toggle == 1 then
         logger.info("Bookeen: enabling Wifi")
-        os.execute("./wlan.sh start")
+        os.execute("/etc/init.d/wlan start")
     else
         logger.info("Bookeen: disabling Wifi")
-        os.execute("./wlan.sh stop")
+        os.execute("/etc/init.d/wlan stop")
     end
 end
+
+local function isConnected()
+    -- read carrier state from sysfs (for eth0)
+    local file = io.open("/sys/class/net/wlan0/carrier", "rb")
+    if not file then return 0 end
+
+    -- 0 means not connected, 1 connected
+    local out = file:read("*all")
+    file:close()
+
+    local carrier
+    if type(out) ~= "number" then
+        carrier = tonumber(out)
+    else
+        carrier = out
+    end
+
+    if type(carrier) == "number" then
+        return carrier
+    else
+        return 0
 
 function Bookeen:initNetworkManager(NetworkMgr)
     function NetworkMgr:turnOffWifi(complete_callback)
         bookeenEnableWifi(0)
         self.releaseIP()
+        if complete_callback then
+            complete_callback()
+        end
     end
 
     function NetworkMgr:turnOnWifi(complete_callback)
         bookeenEnableWifi(1)
         self:reconnectOrShowNetworkMenu(complete_callback)
-
     end
 
     NetworkMgr:setWirelessBackend(
@@ -75,6 +207,15 @@ function Bookeen:initNetworkManager(NetworkMgr)
             end
         end
         return false
+        self:showNetworkMenu(complete_callback)
+    end
+
+    -- net_if = "wlan0"
+    -- NetworkMgr:setWirelessBackend(
+    --     "wpa_supplicant", {ctrl_interface = "/var/run/wpa_supplicant/" .. net_if})
+
+    function NetworkMgr:isWifiOn()
+        return 1 == isConnected()
     end
 end
 
@@ -118,7 +259,6 @@ function Bookeen:initEventAdjustHooks()
     end
 end
 
-
 function Bookeen:init()
     self.screen = require("ffi/framebuffer_mxcfb"):new{device = self, debug = logger.dbg}
     self.powerd = require("device/bookeen/powerd"):new{device = self}
@@ -140,10 +280,31 @@ function Bookeen:init()
         }
     }
 
+    if self:getDeviceGeneration() == BOOKEEN_GENERATION_MUSE_OCEAN then
+        -- On the Cybook Muse Frontlight and Ocean
+        -- pressing the Home button 1 second toggle the frontlight
+        self.input.event_map_adapter.Home = function(ev)
+            if self.input:isEvKeyRepeat(ev) then
+                self.just_toggled_frontlight = 1
+                self.powerd:toggleFrontlight()
+            elseif self.input:isEvKeyRelease(ev) then
+                if self.just_toggled_frontlight == 1 then
+                   self.just_toggled_frontlight = 0
+                else
+                   return Event:new("Home")
+                end
+            end
+        end
+    end
+
     self.input.open("/dev/input/event0") -- Face buttons
     self.input.open("/dev/input/event1") -- Power button
     self.input.open("/dev/input/event2") -- Touch screen
-    self.input.open("/dev/input/event3") -- Accelerometer
+
+    if self:getDeviceGeneration() ~= BOOKEEN_GENERATION_MUSE_OCEAN then
+        self.input.open("/dev/input/event3") -- Accelerometer
+    end
+
     self.input.handleTouchEv = self.input.handleBookeenTouchEvent
     self:initEventAdjustHooks()
     -- self.input.open("fake_events")  -- no free slots :(

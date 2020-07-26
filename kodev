@@ -124,6 +124,7 @@ SUPPORTED_TARGETS="
     kobo
     cervantes
     remarkable
+    bookeen
     sony-prstux
     android
     pocketbook
@@ -470,7 +471,7 @@ ${SUPPORTED_RELEASE_TARGETS}"
             make TARGET=pocketbook update
             ;;
         bookeen)
-            kodev-build bookeen 
+            kodev-build bookeen
             make TARGET=bookeen update
             ;;
         ubuntu-touch)
