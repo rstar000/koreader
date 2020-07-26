@@ -42,15 +42,16 @@ Known models:
     Cybook Muse Frontlight          (CYBFT1F-BK):   BK646BK1F   2014    Allwinner A13
     Cybook Ocean                    (CYBON1F-BK):   BK816BK1F   2014    OMAP 3611
     Cybook Ocean                    (CYBON1F-BK):   BK826BK1F   2014    OMAP 3611
-    Cybook Muse Light               (?):            BK666BK1F
+    Cybook Muse Light               (CYBME1F-BK):   BK666BK1F
+    Cybook Muse Frontlight 2        (CYBME2F-BK):   BK676BK2F
     Cybook Muse HD                  (CYBFT6F-BK):   BK656GY6F   2016
     Nolimbook HD                    (CYBFT1S-CF):   ?           2014
     Nolimbook HD+                   (CYBFT1F-CF):   ?           2014
     Letto Frontlight                (CYBFT1F-AL):   ?           2014
     Nolim XL (Cybook Ocean)         (?):            CF816WE1F
     Saga                            (CYBSB2F-BK):   BK677BK2F   2017
-    Diva                            (?):            BK658WE1G   2019
-    Diva HD                         (?):            ?
+    Diva                            (CYBD1F-BK):    BK658WE1G   2019
+    Diva HD                         (CYBD6F-BK):    ?
 
 Screen Type seems to be XY where
 - X is Screen Size (6" or 8")
@@ -74,7 +75,10 @@ local BOOKEEN_GENERATION_SAGA       = 0x7
 local BOOKEEN_GENERATION_DIVA       = 0x8
 
 local BOOKEEN_DEVICE_COLOR_BLACK    = "BK"
+local BOOKEEN_DEVICE_COLOR_BORDEAUX = "BX"
+local BOOKEEN_DEVICE_COLOR_GREEN    = "GN"
 local BOOKEEN_DEVICE_COLOR_GREY     = "GY"
+local BOOKEEN_DEVICE_COLOR_YELLOW   = "YW"
 local BOOKEEN_DEVICE_COLOR_WHITE    = "WE"
 
 local function getSerial()
@@ -250,7 +254,7 @@ function Bookeen:init()
 
     if self:getDeviceGeneration() == BOOKEEN_GENERATION_MUSE_OCEAN then
         -- On the Cybook Muse Frontlight and Ocean
-        -- Pressing the Home button 1 second toggle the frontlight
+        -- pressing the Home button 1 second toggle the frontlight
         self.input.event_map_adapter.Home = function(ev)
             if self.input:isEvKeyRepeat(ev) then
                 self.just_toggled_frontlight = 1
