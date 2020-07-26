@@ -139,41 +139,20 @@ end
 local function bookeenEnableWifi(toggle)
     if toggle == 1 then
         logger.info("Bookeen: enabling Wifi")
-        os.execute("/etc/init.d/wlan start")
+        os.execute("./wlan.sh start")
     else
         logger.info("Bookeen: disabling Wifi")
-        os.execute("/etc/init.d/wlan stop")
+        os.execute("./wlan.sh stop")
     end
 end
 
-local function isConnected()
-    -- read carrier state from sysfs (for eth0)
-    local file = io.open("/sys/class/net/wlan0/carrier", "rb")
-    if not file then return 0 end
-
-    -- 0 means not connected, 1 connected
-    local out = file:read("*all")
-    file:close()
-
-    local carrier
-    if type(out) ~= "number" then
-        carrier = tonumber(out)
-    else
-        carrier = out
-    end
-
-    if type(carrier) == "number" then
-        return carrier
-    else
-        return 0
-
 function Bookeen:initNetworkManager(NetworkMgr)
+    local device_serial = getSerial()
+    local device_generation = tonumber(device_serial:sub(5, 5), 16)
+
     function NetworkMgr:turnOffWifi(complete_callback)
         bookeenEnableWifi(0)
         self.releaseIP()
-        if complete_callback then
-            complete_callback()
-        end
     end
 
     function NetworkMgr:turnOnWifi(complete_callback)
@@ -185,10 +164,18 @@ function Bookeen:initNetworkManager(NetworkMgr)
         "wpa_supplicant", {ctrl_interface = "/var/run/wpa_supplicant/wlan0"})
 
     function NetworkMgr:obtainIP()
-        os.execute("dhcpcd wlan0")
+        local obtain_ip_cmd = "dhcpcd wlan0"
+        if device_generation == BOOKEEN_GENERATION_MUSE_OCEAN then
+            obtain_ip_cmd = "udhcpc -i wlan0 -R"
+        end
+        os.execute(obtain_ip_cmd)
     end
     function NetworkMgr:releaseIP()
-        os.execute("dhcpcd -k wlan0")
+        local release_ip_cmd = "dhcpcd -k wlan0"
+        if device_generation == BOOKEEN_GENERATION_MUSE_OCEAN then
+            release_ip_cmd = "killall udhcpc"
+        end
+        os.execute(release_ip_cmd)
     end
     function NetworkMgr:restoreWifiAsync()
         os.execute("./restore-wifi-async.sh")
@@ -207,16 +194,8 @@ function Bookeen:initNetworkManager(NetworkMgr)
             end
         end
         return false
-        self:showNetworkMenu(complete_callback)
     end
 
-    -- net_if = "wlan0"
-    -- NetworkMgr:setWirelessBackend(
-    --     "wpa_supplicant", {ctrl_interface = "/var/run/wpa_supplicant/" .. net_if})
-
-    function NetworkMgr:isWifiOn()
-        return 1 == isConnected()
-    end
 end
 
 
@@ -287,6 +266,9 @@ function Bookeen:init()
             if self.input:isEvKeyRepeat(ev) then
                 self.just_toggled_frontlight = 1
                 self.powerd:toggleFrontlight()
+                if self.powerd:isFrontlightOn() and self.powerd:frontlightIntensity() == 0 then
+                    self.powerd:setIntensity(1)
+                end
             elseif self.input:isEvKeyRelease(ev) then
                 if self.just_toggled_frontlight == 1 then
                    self.just_toggled_frontlight = 0
