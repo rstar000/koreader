@@ -231,6 +231,10 @@ ${SUPPORTED_TARGETS}"
             make TARGET=pocketbook
             assert_ret_zero $?
             ;;
+        bookeen)
+            make TARGET=bookeen
+            assert_ret_zero $?
+            ;;
         ubuntu-touch)
             make TARGET=ubuntu-touch
             assert_ret_zero $?
@@ -464,6 +468,10 @@ ${SUPPORTED_RELEASE_TARGETS}"
         pocketbook)
             kodev-build pocketbook
             make TARGET=pocketbook update
+            ;;
+        bookeen)
+            kodev-build bookeen 
+            make TARGET=bookeen update
             ;;
         ubuntu-touch)
             kodev-build ubuntu-touch
