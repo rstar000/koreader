@@ -42,8 +42,8 @@ start ()
 	else
 		return -2
 	fi
-	
-	wpa_supplicant -B -i wlan0 -c /mnt/fat/system/bin/ws.conf
+
+	wpa_supplicant -B -i wlan0 -C /var/run/wpa_supplicant
 
 	return 0
 }
