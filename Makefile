@@ -447,7 +447,7 @@ bookeenupdate: all
 	# remove old package if any
 	rm -f $(BOOKEEN_PACKAGE)
 	# Bookeen scripts
-	cp $(REMARKABLE_DIR)/* $(INSTALL_DIR)/koreader
+	cp $(BOOKEEN_DIR)/* $(INSTALL_DIR)/koreader
 	cp $(COMMON_DIR)/spinning_zsync $(INSTALL_DIR)/koreader
 	# create new package
 	cd $(INSTALL_DIR) && \
@@ -465,7 +465,7 @@ bookeenupdate: all
 	        koreader/ota/package.index
 	# make gzip bookeen update for zsync OTA update
 	cd $(INSTALL_DIR) && \
-	        tar -I"gzip --rsyncable" -cah --no-recursion -f ../$(BOOKEEN_PACKAGE) \
+	        tar -I"gzip --rsyncable" -cah --no-recursion -f ../$(BOOKEEN_PACKAGE_OTA) \
 	        -T koreader/ota/package.index
 
 
@@ -549,7 +549,7 @@ else ifeq ($(TARGET), sony-prstux)
 else ifeq ($(TARGET), remarkable)
 	make remarkableupdate
 else ifeq ($(TARGET), bookeen)
-	make remarkableupdate
+	make bookeenupdate
 
 else ifeq ($(TARGET), ubuntu-touch)
 	make utupdate
